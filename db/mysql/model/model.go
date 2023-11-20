@@ -22,6 +22,7 @@ type Order struct {
 	OrderSide OrderSide
 	AssetType string `gorm:"default:SOL-ECPC"`
 	Price     float64
+	Total     float64
 	Quantity  float64
 }
 
@@ -45,5 +46,7 @@ type AccountAssets struct {
 	CexAddress    string
 	CexPrivateKey string
 	SolBalance    float64 `gorm:"default:0"`
+	SolTotal      float64 `gorm:"default:0"`
 	EcpcBalance   float64 `gorm:"default:0"`
+	EcpcTotal     float64 `gorm:"default:0"`
 }

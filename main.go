@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"MatrixAI-CEX/chain/conn"
+	"MatrixAI-CEX/config"
 	"MatrixAI-CEX/db/mysql"
 	"MatrixAI-CEX/exchange"
 )
@@ -28,61 +29,97 @@ func main() {
 
 	r := gin.Default()
 
-	r.POST("/order", func(c *gin.Context) {
-		var order exchange.BodyOrder
-		if err := c.ShouldBindJSON(&order); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
+	r.POST("/order", addOrder)
+	r.DELETE("/order/:id", deleteOrder)
+	r.GET("/trades", getTrades)
+	r.GET("/userOrders", getUserOrders)
+	r.POST("/register", registerUser)
+	r.GET("/user/:userId", getUserAccountAssets)
+	r.GET("/transactionRecords", getTransactionRecords)
+	r.Run(config.URL)
+}
 
-		id := ex.AddOrder(order)
-		c.JSON(http.StatusOK, gin.H{"message": "Order added successfully", "id": id})
-	})
+func addOrder(c *gin.Context) {
+	var order exchange.BodyOrder
+	if err := c.ShouldBindJSON(&order); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	r.DELETE("/order/:id", func(c *gin.Context) {
-		id := c.Param("id")
-		if err = ex.DeleteOrder(id); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
+	id, err := ex.AddOrder(order)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Order added successfully", "id": id})
+}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Order deleted successfully"})
-	})
+func deleteOrder(c *gin.Context) {
+	id := c.Param("id")
+	if err := ex.DeleteOrder(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	r.GET("/trades", func(c *gin.Context) {
-		buyOrderList, sellOrderList, err := ex.GetAndProcessOrders()
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"buyOrders": buyOrderList, "sellOrders": sellOrderList})
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Order deleted successfully"})
+}
 
-	r.POST("/register", func(c *gin.Context) {
-		var register exchange.BodyRegister
-		if err := c.ShouldBindJSON(&register); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
+func getTrades(c *gin.Context) {
+	buyOrderList, sellOrderList, err := ex.GetAndProcessOrders()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"buyOrders": buyOrderList, "sellOrders": sellOrderList})
+}
 
-		userId, err := ex.RegisterUser(register)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
+func getUserOrders(c *gin.Context) {
+	var user exchange.BodyUser
 
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "registered successfully", "userId": userId})
-	})
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	r.GET("/user/:userId", func(c *gin.Context) {
-		userId := c.Param("userId")
-		accountAssets, err := ex.GetUserAccountAssets(userId)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "get user account assets successfully", "accountAssets": accountAssets})
-	})
+	userOrderList, err := ex.GetUserOrders(user)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	r.Run("")
+	c.JSON(http.StatusOK, gin.H{"userOrders": userOrderList})
+}
+
+func registerUser(c *gin.Context) {
+	var register exchange.BodyRegister
+	if err := c.ShouldBindJSON(&register); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userId, err := ex.RegisterUser(register)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "registered successfully", "userId": userId})
+}
+
+func getUserAccountAssets(c *gin.Context) {
+	userId := c.Param("userId")
+	accountAssets, err := ex.GetUserAccountAssets(userId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "get user account assets successfully", "accountAssets": accountAssets})
+}
+
+func getTransactionRecords(c *gin.Context) {
+	records, err := ex.GetTransactionRecords()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "get transaction records successfully", "records": records})
 }

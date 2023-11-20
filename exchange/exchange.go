@@ -20,25 +20,47 @@ type Exchange struct {
 	Conn    *conn.Conn
 }
 
-func (e *Exchange) AddOrder(bodyOrder BodyOrder) string {
+func (e *Exchange) AddOrder(bodyOrder BodyOrder) (string, error) {
+	var accountAssets model.AccountAssets
+	result := e.MysqlDB.Where("user_id = ?", bodyOrder.UserID).First(&accountAssets)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return "", fmt.Errorf("userId does not exist")
+		}
+		return "", result.Error
+	}
+
+	// Validate the Type value
+	if err := bodyOrder.Type.Validate(); err != nil {
+		return "", err
+	}
 
 	side := model.Sell
 	if bodyOrder.Type == Buy {
 		side = model.Buy
+		if accountAssets.SolBalance < bodyOrder.Amount {
+			return "", fmt.Errorf("insufficient balance: Sol")
+		}
+	} else {
+		if accountAssets.EcpcBalance < bodyOrder.Amount {
+			return "", fmt.Errorf("insufficient balance: Ecpc")
+		}
 	}
+
 	order := model.Order{
 		CreatedAt: time.Now(),
 		OrderId:   fmt.Sprintf("%d%s", time.Now().Unix(), bodyOrder.UserID),
 		UserId:    bodyOrder.UserID,
 		OrderSide: side,
 		Price:     bodyOrder.Price,
+		Total:     bodyOrder.Amount,
 		Quantity:  bodyOrder.Amount,
 	}
 
 	e.MysqlDB.Create(&order)
 	e.matchOrders()
 
-	return order.OrderId
+	return order.OrderId, nil
 }
 
 func (e *Exchange) DeleteOrder(orderID string) error {
@@ -52,6 +74,7 @@ func (e *Exchange) DeleteOrder(orderID string) error {
 
 func (e *Exchange) GetAndProcessOrders() ([]ResOrder, []ResOrder, error) {
 	var buyOrders, sellOrders []model.Order
+
 	if err := e.MysqlDB.Where("order_side = ?", model.Buy).Order("price desc").Find(&buyOrders).Error; err != nil {
 		return nil, nil, err
 	}
@@ -59,16 +82,9 @@ func (e *Exchange) GetAndProcessOrders() ([]ResOrder, []ResOrder, error) {
 		return nil, nil, err
 	}
 
-	buyOrderCh := make(chan rxgo.Item)
-	go func() {
-		defer close(buyOrderCh)
-		for _, order := range buyOrders {
-			buyOrderCh <- rxgo.Of(order)
-		}
-	}()
-	buyOrderObs := rxgo.FromChannel(buyOrderCh).Map(func(_ context.Context, i interface{}) (interface{}, error) {
+	buyOrderObs := rxgo.Just(buyOrders)().Map(func(_ context.Context, i interface{}) (interface{}, error) {
 		oldOrder := i.(model.Order)
-		return ResOrder{Type: Sell, Price: oldOrder.Price, Amount: oldOrder.Quantity}, nil
+		return ResOrder{Type: Buy, Price: oldOrder.Price, Amount: oldOrder.Quantity}, nil
 	}).Scan(func(_ context.Context, a, b interface{}) (interface{}, error) {
 		var orderA ResOrder
 		if a != nil {
@@ -82,14 +98,7 @@ func (e *Exchange) GetAndProcessOrders() ([]ResOrder, []ResOrder, error) {
 		return orderB, nil
 	})
 
-	sellOrderCh := make(chan rxgo.Item)
-	go func() {
-		defer close(sellOrderCh)
-		for _, order := range sellOrders {
-			sellOrderCh <- rxgo.Of(order)
-		}
-	}()
-	sellOrderObs := rxgo.FromChannel(sellOrderCh).Map(func(_ context.Context, i interface{}) (interface{}, error) {
+	sellOrderObs := rxgo.Just(sellOrders)().Map(func(_ context.Context, i interface{}) (interface{}, error) {
 		oldOrder := i.(model.Order)
 		return ResOrder{Type: Sell, Price: oldOrder.Price, Amount: oldOrder.Quantity}, nil
 	}).Scan(func(_ context.Context, a, b interface{}) (interface{}, error) {
@@ -118,15 +127,41 @@ func (e *Exchange) GetAndProcessOrders() ([]ResOrder, []ResOrder, error) {
 	return buyOrderList, sellOrderList, nil
 }
 
-func (e *Exchange) RegisterUser(register BodyRegister) (string, error) {
-	solAccount := solana.NewWallet()
+func (e *Exchange) GetUserOrders(user BodyUser) ([]ResOrder, error) {
+	var userOrders []model.Order
 
-	accountAssets := model.AccountAssets{
-		UserId:        uuid.New().String(),
-		Address:       register.Address,
-		CexAddress:    solAccount.PublicKey().String(),
-		CexPrivateKey: solAccount.PrivateKey.String(),
+	if err := e.MysqlDB.Where("user_id = ?", user.UserID).Find(&userOrders).Error; err != nil {
+		return nil, err
 	}
+
+	userOrderObs := rxgo.Just(userOrders)().Map(func(_ context.Context, i interface{}) (interface{}, error) {
+		oldOrder := i.(model.Order)
+		orderType := Buy
+		if oldOrder.OrderSide == model.Sell {
+			orderType = Sell
+		}
+		return ResOrder{CreatedAt: oldOrder.CreatedAt, Type: orderType, Price: oldOrder.Price, Amount: oldOrder.Quantity, Total: oldOrder.Total}, nil
+	})
+
+	orderList := make([]ResOrder, 0)
+	for item := range userOrderObs.Observe() {
+		if item.Error() {
+			return nil, item.E
+		}
+		orderList = append(orderList, item.V.(ResOrder))
+	}
+
+	return orderList, nil
+}
+
+func (e *Exchange) RegisterUser(register BodyRegister) (string, error) {
+
+	_, err := solana.PublicKeyFromBase58(register.Address)
+	if err != nil {
+		return "", err
+	}
+
+	var accountAssets model.AccountAssets
 
 	var count int64
 	result := e.MysqlDB.Model(&model.AccountAssets{}).Where("address = ?", register.Address).Count(&count)
@@ -134,7 +169,16 @@ func (e *Exchange) RegisterUser(register BodyRegister) (string, error) {
 		return "", result.Error
 	}
 	if count > 0 {
-		return "", fmt.Errorf("address already exists")
+		e.MysqlDB.Where("address = ?", register.Address).First(&accountAssets)
+		return accountAssets.UserId, nil
+	}
+
+	solAccount := solana.NewWallet()
+	accountAssets = model.AccountAssets{
+		UserId:        uuid.New().String(),
+		Address:       register.Address,
+		CexAddress:    solAccount.PublicKey().String(),
+		CexPrivateKey: solAccount.PrivateKey.String(),
 	}
 
 	result = e.MysqlDB.Create(&accountAssets)
@@ -164,6 +208,7 @@ func (e *Exchange) GetUserAccountAssets(userId string) (ResUser, error) {
 
 	if amount > 0 {
 		accountAssets.SolBalance += float64(amount) / float64(solana.LAMPORTS_PER_SOL)
+		accountAssets.SolTotal += float64(amount) / float64(solana.LAMPORTS_PER_SOL)
 	}
 
 	e.MysqlDB.Save(&accountAssets)
@@ -175,7 +220,9 @@ func (e *Exchange) GetUserAccountAssets(userId string) (ResUser, error) {
 			Address:     accountAssets.Address,
 			CexAddress:  accountAssets.CexAddress,
 			SolBalance:  accountAssets.SolBalance,
+			SolTotal:    accountAssets.SolTotal,
 			EcpcBalance: accountAssets.EcpcBalance,
+			EcpcTotal:   accountAssets.EcpcTotal,
 		}, nil
 	})
 	resUserResult := <-resUserObservable.Observe()
@@ -185,6 +232,30 @@ func (e *Exchange) GetUserAccountAssets(userId string) (ResUser, error) {
 	resUser = resUserResult.V.(ResUser)
 
 	return resUser, nil
+}
+
+func (e *Exchange) GetTransactionRecords() ([]ResRecords, error) {
+	var records []model.TransactionRecord
+	e.MysqlDB.Order("created_at desc").Find(&records)
+
+	recordsObs := rxgo.Just(records)().Map(func(_ context.Context, i interface{}) (interface{}, error) {
+		oldRecords := i.(model.TransactionRecord)
+		return ResRecords{
+			CreatedAt:         oldRecords.CreatedAt,
+			TransactionPrice:  oldRecords.TransactionPrice,
+			TransactionAmount: oldRecords.TransactionAmount,
+		}, nil
+	})
+
+	recordsList := make([]ResRecords, 0)
+	for item := range recordsObs.Observe() {
+		if item.Error() {
+			return nil, item.E
+		}
+		recordsList = append(recordsList, item.V.(ResRecords))
+	}
+
+	return recordsList, nil
 }
 
 func clearDuplicateData(o rxgo.Observable) ([]ResOrder, error) {
