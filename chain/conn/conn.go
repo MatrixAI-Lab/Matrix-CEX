@@ -3,6 +3,7 @@ package conn
 import (
 	"MatrixAI-CEX/config"
 	"MatrixAI-CEX/db/mysql/model"
+	logs "MatrixAI-CEX/utils/log_utils"
 	"context"
 	"fmt"
 	"math/big"
@@ -66,6 +67,8 @@ func (conn *Conn) RechargeSol(accountAssets model.AccountAssets) (string, uint64
 
 	amount := uint64(out.Value)
 
+	logs.Normal(fmt.Sprintf("CEX SOL balance: %d", amount))
+
 	if amount >= solana.LAMPORTS_PER_SOL {
 		accountFrom, err := solana.PrivateKeyFromBase58(accountAssets.CexPrivateKey)
 		if err != nil {
@@ -120,4 +123,72 @@ func (conn *Conn) RechargeSol(accountAssets model.AccountAssets) (string, uint64
 		return sig.String(), amount, nil
 	}
 	return "", 0, nil
+}
+
+func (conn *Conn) Withdraw(toAddress string, toAmount uint64) (string, error) {
+
+	pubKey := solana.MustPublicKeyFromBase58(config.CEX_CAPITAL_POOL)
+	out, err := conn.RpcClient.GetBalance(
+		context.TODO(),
+		pubKey,
+		rpc.CommitmentFinalized,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	amount := uint64(out.Value)
+
+	if amount >= toAmount {
+		accountFrom, err := solana.PrivateKeyFromBase58(config.CEX_CAPITAL_PK)
+		if err != nil {
+			return "", err
+		}
+		accountTo := solana.MustPublicKeyFromBase58(toAddress)
+
+		recent, err := conn.RpcClient.GetRecentBlockhash(context.TODO(), rpc.CommitmentFinalized)
+		if err != nil {
+			return "", err
+		}
+
+		tx, err := solana.NewTransaction(
+			[]solana.Instruction{
+				system.NewTransferInstruction(
+					toAmount,
+					accountFrom.PublicKey(),
+					accountTo,
+				).Build(),
+			},
+			recent.Value.Blockhash,
+			solana.TransactionPayer(accountFrom.PublicKey()),
+		)
+		if err != nil {
+			return "", err
+		}
+
+		_, err = tx.Sign(
+			func(key solana.PublicKey) *solana.PrivateKey {
+				if accountFrom.PublicKey().Equals(key) {
+					return &accountFrom
+				}
+				return nil
+			},
+		)
+		if err != nil {
+			return "", fmt.Errorf("unable to sign transaction: %w", err)
+		}
+
+		// Send transaction, and wait for confirmation:
+		sig, err := sendandconfirm.SendAndConfirmTransaction(
+			context.TODO(),
+			conn.RpcClient,
+			conn.WsClient,
+			tx,
+		)
+		if err != nil {
+			return "", fmt.Errorf("unable to send transaction: %w", err)
+		}
+		return sig.String(), nil
+	}
+	return "", fmt.Errorf("CEX SOL insufficient balance")
 }

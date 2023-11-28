@@ -20,18 +20,16 @@ func (ot OrderType) Validate() error {
 }
 
 type BodyOrder struct {
-	UserID string    `json:"userID" binding:"required"`
-	Price  float64   `json:"price" binding:"required"`
-	Amount float64   `json:"amount" binding:"required"`
-	Type   OrderType `json:"type"`
-}
-
-type BodyUser struct {
-	UserID string `json:"userId" binding:"required"`
+	UserID     string    `json:"userID" binding:"required"`
+	Price      float64   `json:"price" binding:"required"`
+	SolAmount  float64   `json:"solAmount" binding:"required"`
+	EcpcAmount float64   `json:"ecpcAmount" binding:"required"`
+	Type       OrderType `json:"type"`
 }
 
 type ResOrder struct {
 	CreatedAt time.Time `json:"createdAt"`
+	OrderID   string    `json:"orderId"`
 	Type      OrderType `json:"type"`
 	Price     float64   `json:"price"`
 	Amount    float64   `json:"amount"`
@@ -56,4 +54,35 @@ type ResRecords struct {
 	CreatedAt         time.Time `json:"createdAt"`
 	TransactionPrice  float64   `json:"transactionPrice"`
 	TransactionAmount float64   `json:"transactionAmount"`
+}
+
+type BodyWithdraw struct {
+	UserID    string  `json:"userID" binding:"required"`
+	AssetType string  `json:"assetType" binding:"required"`
+	Amount    float64 `json:"amount" binding:"required"`
+}
+
+type AmountType int
+
+const (
+	Deposite AmountType = iota
+	Withdraw
+)
+
+func (at AmountType) Validate() error {
+	if at != Deposite && at != Withdraw {
+		return errors.New("invalid amount type")
+	}
+	return nil
+}
+
+type BodyUpdateUser struct {
+	UserID    string     `json:"userID" binding:"required"`
+	AssetType string     `json:"assetType" binding:"required"`
+	Type      AmountType `json:"type"`
+	Amount    float64    `json:"amount" binding:"required"`
+}
+
+type BodyDebug struct {
+	Password string `json:"password" binding:"required"`
 }
