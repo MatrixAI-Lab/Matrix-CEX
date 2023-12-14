@@ -4,18 +4,21 @@ import (
 	"MatrixAI-CEX/common"
 	"MatrixAI-CEX/config"
 	"MatrixAI-CEX/db/mysql/model"
+	"MatrixAI-CEX/middleware"
 	logs "MatrixAI-CEX/utils/log_utils"
 	"MatrixAI-CEX/utils/resp"
+	"context"
 	"fmt"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gopkg.in/gomail.v2"
+	"log"
 	"math/rand"
 	"time"
 )
 
-const EMAIL_BODY = `
+const EmailBody = `
 <div>
 	<div>
 		尊敬的%s，您好！
@@ -29,56 +32,73 @@ const EMAIL_BODY = `
 </div>
 `
 
-type GetValidateCodeReq struct {
+type EmailCodeReq struct {
 	Email string `binding:"required,email"`
 }
 
-func GetValidateCode(context *gin.Context) {
-	var req GetValidateCodeReq
-	if err := context.ShouldBindJSON(&req); err != nil {
-		resp.Fail(context, "Parameter missing")
+func EmailCode(c *gin.Context) {
+	var req EmailCodeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.Fail(c, "Parameter missing")
 		return
 	}
 
 	// Generate validate code
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	vCode := fmt.Sprintf("%06v", rnd.Int31n(1000000))
-	t := time.Now().Format("2006-01-02 15:04:05")
-	content := fmt.Sprintf(EMAIL_BODY, req.Email, t, vCode)
-	if sendEmail(req.Email, content) != nil {
-		resp.Fail(context, "Send email Fail")
+	code := fmt.Sprintf("%06v", rnd.Int31n(1000000))
+	log.Printf("vCode: %s", code)
+
+	// Save validate code in Redis
+	ctx := context.Background()
+	err := common.Rdb.SetEx(ctx, req.Email, code, time.Minute*5).Err()
+	if err != nil {
+		resp.Fail(c, "Get Validate Code error")
 		return
 	}
 
-	// TODO: Save validate code in Redis
+	// Send email
+	t := time.Now().Format("2006-01-02 15:04:05")
+	content := fmt.Sprintf(EmailBody, req.Email, t, code)
+	if sendEmail(req.Email, content) != nil {
+		resp.Fail(c, "Send email Fail")
+		return
+	}
 
-	resp.Success(context, "")
+	resp.Success(c, "")
 }
 
 type LoginReq struct {
-	Email        string `binding:"required,email"`
-	ValidateCode string `binding:"required"`
+	Email string `binding:"required,email"`
+	Code  string `binding:"required"`
 }
 
 type LoginResp struct {
 	UserId string
+	Token  string
 }
 
-func Login(context *gin.Context) {
+func Login(c *gin.Context) {
 	var req LoginReq
-	if err := context.ShouldBindJSON(&req); err != nil {
-		resp.Fail(context, "Parameter missing")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.Fail(c, "Parameter missing")
 		return
 	}
 
-	// TODO: Get validate code from Redis
+	// Get validate code from Redis
+	ctx := context.Background()
+	code, err := common.Rdb.GetDel(ctx, req.Email).Result()
+	if err != nil || code != req.Code {
+		resp.Fail(c, "Validate Code error")
+		return
+	}
+
 	accountAssets := model.AccountAssets{Email: req.Email}
 	var count int64
 	tx := common.Db.Model(&accountAssets).Where(&accountAssets)
 	dbResult := tx.Count(&count)
 	if dbResult.Error != nil {
 		logs.Error(fmt.Sprintf("Database error: %s \n", dbResult.Error))
-		resp.Fail(context, "Database error")
+		resp.Fail(c, "Database error")
 		return
 	}
 	if count > 0 {
@@ -91,13 +111,14 @@ func Login(context *gin.Context) {
 
 		if dbResult := common.Db.Create(&accountAssets); dbResult.Error != nil {
 			logs.Error(fmt.Sprintf("Database error: %s \n", dbResult.Error))
-			resp.Fail(context, "Database error")
+			resp.Fail(c, "Database error")
 			return
 		}
 	}
 
-	response := LoginResp{UserId: accountAssets.UserId}
-	resp.Success(context, response)
+	token, _ := middleware.GenToken(accountAssets.UserId, accountAssets.Email)
+	response := LoginResp{UserId: accountAssets.UserId, Token: token}
+	resp.Success(c, response)
 }
 
 func sendEmail(to string, text string) error {

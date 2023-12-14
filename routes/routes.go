@@ -8,7 +8,7 @@ import (
 func RegisterRoutes(engine *gin.Engine) {
 	user := engine.Group("/user")
 	{
-		user.POST("/validate-code", handlers.GetValidateCode)
+		user.POST("/email-code", handlers.EmailCode)
 		user.POST("/login", handlers.Login)
 	}
 }

@@ -1,13 +1,14 @@
 package main
 
 import (
+	"MatrixAI-CEX/chain/conn"
+	"MatrixAI-CEX/db"
 	"MatrixAI-CEX/routes"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
-	"MatrixAI-CEX/chain/conn"
 	"MatrixAI-CEX/config"
 	"MatrixAI-CEX/db/mysql"
 	"MatrixAI-CEX/exchange"
@@ -23,6 +24,8 @@ func main() {
 		panic(err)
 	}
 	ex.MysqlDB = mysqlDB
+
+	db.InitRedis()
 
 	newConn, err := conn.NewConn()
 	if err != nil {
