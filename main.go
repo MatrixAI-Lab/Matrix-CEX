@@ -1,6 +1,7 @@
 package main
 
 import (
+	"MatrixAI-CEX/routes"
 	"fmt"
 	"net/http"
 
@@ -30,6 +31,7 @@ func main() {
 	ex.Conn = newConn
 
 	r := gin.Default()
+	routes.RegisterRoutes(r)
 
 	r.POST("/order", addOrder)
 	r.DELETE("/order/:orderId", deleteOrder)

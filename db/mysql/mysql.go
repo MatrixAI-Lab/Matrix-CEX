@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"MatrixAI-CEX/common"
 	"MatrixAI-CEX/config"
 	"MatrixAI-CEX/db/mysql/model"
 
@@ -30,5 +31,6 @@ func InitDB() (*gorm.DB, error) {
 		return nil, err
 	}
 
+	common.Db = db
 	return db, nil
 }

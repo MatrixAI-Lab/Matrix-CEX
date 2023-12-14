@@ -13,6 +13,7 @@ const URL = DEBUG_IP + ":" + DEBUG_POST
 // 本机 develop
 const DEV_IP = "172.18.232.45"
 const DEV_POST = "8080"
+
 // 3.27.91.240 debug
 const DEBUG_IP = "0.0.0.0"
 const DEBUG_POST = "8099"
@@ -24,8 +25,15 @@ const DB_NAME = "exchange_db"
 // 本机 develop
 const DEV_DB_USER = "root"
 const DEV_DB_PASSWORD = "root1234"
+
 // 3.27.91.240 debug
 const DEBUG_DB_USER = "root"
 const DEBUG_DB_PASSWORD = "Zxcvbn2023@"
 
 const DEBUG_PASSWORD = "MatrixAI"
+
+// Email
+const EMAIL_HOST = ""
+const EMAIL_PORT = 25
+const EMAIL_USERNAME = ""
+const EMAIL_PASSWORD = ""

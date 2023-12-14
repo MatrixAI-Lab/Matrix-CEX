@@ -42,6 +42,7 @@ type TransactionRecord struct {
 type AccountAssets struct {
 	gorm.Model
 	UserId        string
+	Email         string
 	Address       string
 	CexAddress    string
 	CexPrivateKey string
