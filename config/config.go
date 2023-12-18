@@ -18,8 +18,9 @@ const DEV_POST = "8080"
 const DEBUG_IP = "0.0.0.0"
 const DEBUG_POST = "8099"
 
-// const DSN = "root:root1234@tcp(localhost:3306)/exchange_db?charset=utf8mb4&parseTime=True&loc=Local"
-const DSN = DEBUG_DB_USER + ":" + DEBUG_DB_PASSWORD + "@tcp(localhost:3306)/" + DB_NAME + "?charset=utf8mb4&parseTime=True&loc=Local"
+const DSN = "root:123456@tcp(localhost:3306)/exchange_db?charset=utf8mb4&parseTime=True&loc=Local"
+
+// const DSN = DEBUG_DB_USER + ":" + DEBUG_DB_PASSWORD + "@tcp(localhost:3306)/" + DB_NAME + "?charset=utf8mb4&parseTime=True&loc=Local"
 const DB_NAME = "exchange_db"
 
 // 本机 develop

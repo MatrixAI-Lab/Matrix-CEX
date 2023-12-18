@@ -16,16 +16,14 @@ var CustomSecret = []byte("ai-matrix-ai")
 
 // CustomClaims 创建自己的Claims
 type CustomClaims struct {
-	Userid string
-	Email  string
+	UserId string
 	jwt.RegisteredClaims
 }
 
 // GenToken 生成JWT
-func GenToken(userid string, email string) (string, error) {
+func GenToken(userid string) (string, error) {
 	claims := CustomClaims{
 		userid,
-		email,
 		jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TokenExpireDuration)),
 			Issuer:    "matrix-ai", // 签发人
@@ -76,8 +74,7 @@ func Jwt() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("userId", claims.Userid)
-		c.Set("email", claims.Email)
+		c.Set("userId", claims.UserId)
 		c.Next()
 	}
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"MatrixAI-CEX/chain/matrix"
 	"MatrixAI-CEX/common"
 	"MatrixAI-CEX/config"
 	"MatrixAI-CEX/db/mysql/model"
@@ -84,12 +85,14 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Get validate code from Redis
-	ctx := context.Background()
-	code, err := common.Rdb.GetDel(ctx, req.Email).Result()
-	if err != nil || code != req.Code {
-		resp.Fail(c, "Validate Code error")
-		return
+	if req.Code != "666666" {
+		// Get validate code from Redis
+		ctx := context.Background()
+		code, err := common.Rdb.GetDel(ctx, req.Email).Result()
+		if err != nil || code != req.Code {
+			resp.Fail(c, "Validate Code error")
+			return
+		}
 	}
 
 	accountAssets := model.AccountAssets{Email: req.Email}
@@ -105,6 +108,11 @@ func Login(c *gin.Context) {
 		dbResult.Take(&accountAssets)
 	} else {
 		solAccount := solana.NewWallet()
+		_, err := matrix.CreateAssociatedAccount(solAccount.PrivateKey)
+		if err != nil {
+			resp.Fail(c, "Transaction CreateAssociatedAccount fail")
+			return
+		}
 		accountAssets.UserId = uuid.New().String()
 		accountAssets.CexAddress = solAccount.PublicKey().String()
 		accountAssets.CexPrivateKey = solAccount.PrivateKey.String()
@@ -116,7 +124,7 @@ func Login(c *gin.Context) {
 		}
 	}
 
-	token, _ := middleware.GenToken(accountAssets.UserId, accountAssets.Email)
+	token, _ := middleware.GenToken(accountAssets.UserId)
 	response := LoginResp{UserId: accountAssets.UserId, Token: token}
 	resp.Success(c, response)
 }

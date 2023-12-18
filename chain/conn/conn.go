@@ -1,6 +1,7 @@
 package conn
 
 import (
+	"MatrixAI-CEX/common"
 	"MatrixAI-CEX/config"
 	"MatrixAI-CEX/db/mysql/model"
 	logs "MatrixAI-CEX/utils/log_utils"
@@ -32,6 +33,8 @@ func NewConn() (*Conn, error) {
 		RpcClient: rpcClient,
 		WsClient:  wsClient,
 	}
+	common.RpcClient = rpcClient
+	common.WsClient = wsClient
 
 	return conn, nil
 }
