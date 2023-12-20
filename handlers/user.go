@@ -110,6 +110,7 @@ func Login(c *gin.Context) {
 		solAccount := solana.NewWallet()
 		_, err := matrix.CreateAssociatedAccount(solAccount.PrivateKey)
 		if err != nil {
+			logs.Error(fmt.Sprintf("CreateAssociatedAccount error: %s \n", err))
 			resp.Fail(c, "Transaction CreateAssociatedAccount fail")
 			return
 		}

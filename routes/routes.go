@@ -15,5 +15,6 @@ func RegisterRoutes(engine *gin.Engine) {
 	market := engine.Group("/market", middleware.Jwt())
 	{
 		market.POST("/place-order", handlers.PlaceOrder)
+		market.POST("/renew-order", handlers.RenewOrder)
 	}
 }
