@@ -37,6 +37,7 @@ func PlaceOrder(c *gin.Context) {
 
 	txHash, err := matrix.PlaceOrder(req.PlaceOrderParams, accountAssets.CexPrivateKey)
 	if err != nil {
+		logs.Error(fmt.Sprintf("Transaction error: %s \n", err))
 		resp.Fail(c, "Transaction fail")
 		return
 	}
