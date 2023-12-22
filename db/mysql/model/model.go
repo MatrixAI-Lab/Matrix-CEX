@@ -51,3 +51,11 @@ type AccountAssets struct {
 	EcpcBalance   float64 `gorm:"default:0"`
 	EcpcTotal     float64 `gorm:"default:0"`
 }
+
+// CNY资产表
+type AssetsCNY2User struct {
+	gorm.Model
+	UserId        string
+	CnyBalance    float64 `gorm:"default:0"`
+	CnyTotal      float64 `gorm:"default:0"`
+}

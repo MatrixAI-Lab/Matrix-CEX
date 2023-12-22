@@ -16,17 +16,11 @@ func InitDB() (*gorm.DB, error) {
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&model.Order{})
-	if err != nil {
-		return nil, err
-	}
-
-	err = db.AutoMigrate(&model.TransactionRecord{})
-	if err != nil {
-		return nil, err
-	}
-
-	err = db.AutoMigrate(&model.AccountAssets{})
+	err = db.AutoMigrate(
+		&model.Order{},
+		&model.TransactionRecord{},
+		&model.AccountAssets{},
+		&model.AssetsCNY2User{})
 	if err != nil {
 		return nil, err
 	}

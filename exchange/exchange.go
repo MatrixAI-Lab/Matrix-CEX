@@ -283,6 +283,32 @@ func (e *Exchange) GetUserAccountAssets(userId string) (ResUser, error) {
 	return resUser, nil
 }
 
+func (e *Exchange) GetUserAll() ([]ResUser, error) {
+	var assets []model.AccountAssets
+	e.MysqlDB.Order("ecpc_total desc").Find(&assets)
+
+	assetsObs := rxgo.Just(assets)().Map(func(_ context.Context, i interface{}) (interface{}, error) {
+		oldAssets := i.(model.AccountAssets)
+		return ResUser{
+			UserId:      oldAssets.UserId,
+			Address:     oldAssets.Address,
+			CexAddress:  oldAssets.CexAddress,
+			SolBalance:  oldAssets.SolBalance,
+			SolTotal:    oldAssets.SolTotal,
+			EcpcBalance: oldAssets.EcpcBalance,
+			EcpcTotal:   oldAssets.EcpcTotal,
+		}, nil
+	})
+	assetsList := make([]ResUser, 0)
+	for item := range assetsObs.Observe() {
+		if item.Error() {
+			return nil, item.E
+		}
+		assetsList = append(assetsList, item.V.(ResUser))
+	}
+	return assetsList, nil
+}
+
 func (e *Exchange) GetTransactionRecords() ([]ResRecords, error) {
 	var records []model.TransactionRecord
 	e.MysqlDB.Order("created_at desc").Find(&records)

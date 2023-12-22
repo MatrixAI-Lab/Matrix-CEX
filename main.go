@@ -42,6 +42,7 @@ func main() {
 	r.GET("/userOrders/:userId", getUserOrders)
 	r.POST("/register", registerUser)
 	r.GET("/user/:userId", getUserAccountAssets)
+	r.GET("/userAll", getUserAll)
 	r.GET("/transactionRecords", getTransactionRecords)
 	r.POST("/updateUser", updateUser)
 	// r.POST("/withdraw", withdraw)
@@ -132,6 +133,16 @@ func getUserAccountAssets(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "get user account assets successfully", "accountAssets": accountAssets})
+}
+
+func getUserAll(c *gin.Context) {
+	userAll, err := ex.GetUserAll()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		logs.Error(fmt.Sprintf("/getUserAll: %+v", err))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "get user all successfully", "userAll": userAll})
 }
 
 func getTransactionRecords(c *gin.Context) {
